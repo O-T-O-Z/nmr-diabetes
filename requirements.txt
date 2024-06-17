@@ -12,3 +12,4 @@ shap
 pycox
 torch
 scikit-survival
+pre-commit
