@@ -187,7 +187,7 @@ def main() -> None:
     save_path = os.path.join(
         "experiments", str(args.save) + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     )
-    save_path = "experiments/experiment_normal_bagging2024-06-18_22-15-11"
+
     os.makedirs(save_path, exist_ok=True)
     datasets = [
         ("clinical", "clinical_train.csv"),

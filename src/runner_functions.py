@@ -210,7 +210,7 @@ def cross_validate_model(
             fold_dataset,
             xgbparams,
             plot,
-            eval="mcc" if use_mcc else "cindex",
+            eval_metric="mcc" if use_mcc else "cindex",
             early_stopping_rounds=early_stopping_rounds,
         )
 
