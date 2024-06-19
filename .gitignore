@@ -166,3 +166,7 @@ results*
 old_results/
 logdir/
 experiments_old/
+read_files.py
+plotting.ipynb
+current_hp.json
+experiments

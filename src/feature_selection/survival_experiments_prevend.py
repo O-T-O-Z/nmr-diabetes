@@ -13,7 +13,7 @@ from featboostx.xgb_survival_regressor import XGBSurvivalRegressor
 from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
 
-from feature_selection.utils import reduce
+from src.feature_selection.feat_utils import reduce
 from visualization import plot_feature_selectors
 
 SAVE_PATH = "../../results_fs"

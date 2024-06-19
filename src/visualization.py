@@ -6,6 +6,7 @@ import pandas as pd
 import seaborn as sns
 import shap
 from sklearn.base import BaseEstimator
+from sklearn.decomposition import PCA
 
 from survival_dataset import SurvivalDataset
 from utils import c_index
@@ -187,3 +188,127 @@ def plot_boxplots(experiment_name: str, with_annotations: bool = False) -> None:
     plt.tight_layout()
     plt.xticks([0, 1, 2], ["NMR", "Clinical", "Clinical + NMR"])
     plt.savefig(os.path.join(experiment_name, "boxplot.pdf"))
+
+
+def plot_glucose_levels(df: pd.DataFrame) -> None:
+    """
+    Plot the glucose levels for censored and event participants.
+
+    :param df: dataframe containing the glucose levels.
+    """
+    plt.grid(axis="y", which="both", linestyle="--", linewidth=0.5, alpha=0.75)
+    sns.set_palette("Set2")
+    sns.histplot(
+        df[df["CENSORED"] == 1]["GLUC_2"],
+        bins=10,
+        label="Censored",
+        alpha=1,
+        edgecolor=(0, 0, 0, 0.5),
+    )
+    sns.histplot(
+        df[df["CENSORED"] == 0]["GLUC_2"],
+        bins=10,
+        label="Event",
+        alpha=1,
+        edgecolor=(0, 0, 0, 0.5),
+    )
+    sns.despine()
+
+    plt.gca().set_xticks(np.arange(2, 9, 1))
+    plt.gca().set_xlabel("Fasting glucose (mmol/L)")
+    plt.gca().set_ylabel("Number of participants")
+    plt.gca().set_title("Fasting glucose levels for censored and event participants")
+    plt.tight_layout()
+    plt.legend()
+    plt.savefig("../../methods/glucose_levels.pdf")
+
+
+def plot_one_spectrum(df: pd.DataFrame) -> None:
+    """
+    Plot a single NMR spectrum.
+
+    :param df: df containing the NMR data.
+    """
+    unique_participants = df["ID"].unique().tolist()
+    one_df = df[df["ID"] == unique_participants[0]]
+    plt.plot(one_df["Chemical Shifts"], one_df["PPM"], linestyle="-", color="black")
+    sns.despine()
+    sns.set_style("white")
+    plt.xlabel("PPM")
+    plt.ylabel("Signal Intensity")
+    plt.tight_layout()
+    plt.gca().invert_xaxis()
+    plt.savefig("../../methods/nmr_spectrum.pdf")
+
+
+def plot_survival(df: pd.DataFrame) -> None:
+    """
+    Plot the survival times for censoring and event participants.
+
+    :param df: dataframe containing the survival times.
+    """
+    plt.grid(axis="y", which="both", linestyle="--", linewidth=0.5, alpha=0.75)
+    sns.set_palette("Set2")
+    sns.histplot(
+        df[df["CENSORED"] == 1]["lower_bound"],
+        bins=10,
+        label="Censored",
+        alpha=1,
+        edgecolor=(0, 0, 0, 0.5),
+    )
+    sns.histplot(
+        df[df["CENSORED"] == 0]["lower_bound"],
+        bins=10,
+        label="Event",
+        alpha=1,
+        edgecolor=(0, 0, 0, 0.5),
+    )
+    plt.gca().set_xticks(np.arange(0, 11, 1))
+    plt.gca().set_xlabel("Survival Time in Years")
+    plt.gca().set_ylabel("Number of Participants")
+    plt.gca().set_title("Survival time for censored and event participants")
+    plt.tight_layout()
+    plt.legend()
+    plt.savefig("../../methods/survival_times.pdf")
+
+
+def plot_cumulative_variance() -> None:
+    """Plot the cumulative variance explained by the principal components."""
+    X_train_nmr = pd.read_csv("../../datasets.nosync/nmr_train.csv")
+    X_train_nmr = X_train_nmr.drop(columns=["CENSORED", "upper_bound", "lower_bound"])
+    pca_nmr = PCA()
+    pca_nmr.fit(X_train_nmr)
+    cumulative_variance_nmr = np.cumsum(pca_nmr.explained_variance_ratio_)
+
+    X_train_clinical = pd.read_csv("../../datasets.nosync/clinical_train.csv")
+    X_train_clinical = X_train_clinical.drop(
+        columns=["CENSORED", "upper_bound", "lower_bound"]
+    )
+    X_train_clinical = X_train_clinical.fillna(X_train_clinical.median())
+    pca_clinical = PCA()
+    pca_clinical.fit(X_train_clinical)
+    cumulative_variance_clinical = np.cumsum(pca_clinical.explained_variance_ratio_)
+
+    sns.set_palette("pastel")
+    sns.lineplot(
+        cumulative_variance_nmr[:100] * 100,
+        marker="v",
+        linestyle="-",
+        alpha=1,
+        label="NMR",
+    )
+    sns.lineplot(
+        cumulative_variance_clinical[:100] * 100,
+        marker="v",
+        linestyle="-",
+        alpha=1,
+        label="Clinical",
+    )
+
+    plt.xlabel("Number of Principal Components (PCs)")
+    plt.ylabel("Cumulative variance (%)")
+    plt.title("Cumulative variance explained by PCs")
+    plt.legend(loc="lower right")
+    plt.xlim(0, 30)
+    plt.grid()
+    plt.savefig("../../methods/cumulative_variance.pdf")
