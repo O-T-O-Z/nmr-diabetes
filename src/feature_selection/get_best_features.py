@@ -4,7 +4,9 @@
 import json
 import os
 
-from main import SurvivalDataset, cross_validate_model, load_feature_selection
+from runner_functions import cross_validate_model
+from src.utils import load_feature_selection
+from survival_dataset import SurvivalDataset
 
 if __name__ == "__main__":
     SAVE_PATH = "../../results_fs"

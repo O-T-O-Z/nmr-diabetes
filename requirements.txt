@@ -13,3 +13,4 @@ pycox
 torch
 scikit-survival
 pre-commit
+pydantic

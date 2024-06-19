@@ -7,7 +7,8 @@ from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV, KFold
 from sksurv.ensemble import GradientBoostingSurvivalAnalysis, RandomSurvivalForest
 
-from main import SurvivalDataset, load_best_features
+from src.runner_functions import SurvivalDataset
+from utils import load_best_features
 
 
 class CoxPHWrapper(BaseEstimator, RegressorMixin):

@@ -6,7 +6,8 @@ import pandas as pd
 from deepsurv import DeepSurv
 from numpy import float32, int32
 
-from main import SurvivalDataset, load_best_features
+from src.runner_functions import SurvivalDataset
+from utils import load_best_features
 
 logging.basicConfig(level=logging.INFO)
 
