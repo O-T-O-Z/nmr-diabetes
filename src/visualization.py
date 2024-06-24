@@ -502,7 +502,7 @@ def plot_survival_time(
     sns_green, sns_orange = sns.color_palette("Set2")[:2]
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    for i, _ in range(len(df["patient"])):
+    for i in range(len(df["patient"])):
         if not np.isinf(df.loc[i, "actual_event"]):
             maximum = max(df.loc[i, "actual_event"], df.loc[i, "predicted_event"])
         else:

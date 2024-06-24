@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from umap import UMAP
 
-from src.feature_selection.feat_utils import reduce
+from feature_selection.feat_utils import reduce
 from visualization import plot_feature_selectors
 
 SAVE_PATH = "../../results_fs"
