@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from survival_dataset import SurvivalDataset
 from utils import bootstrap_split, c_index, calculate_mcc, convert_to_dmatrix
-from visualization import plot_shap, plot_training
+from visualization import plot_shap, plot_survival_time, plot_training
 
 
 def train_one_model(
@@ -101,6 +101,9 @@ def test_model(
         test_dataset.y_lower_bound,
         test_dataset.y_upper_bound,
         clf.predict(dtest) * scale,
+    )
+    plot_survival_time(
+        test_dataset.y_upper_bound, clf.predict(dtest) * scale, plot_path=plot_path
     )
     plot_shap(clf, train_dataset, best_features, plot_path=plot_path)
     return cindex, censoring_acc, mae_observed

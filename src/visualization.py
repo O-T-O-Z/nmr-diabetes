@@ -1,10 +1,12 @@
 import os
+import random
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import shap
+from matplotlib.lines import Line2D
 from sklearn.base import BaseEstimator
 from sklearn.decomposition import PCA
 
@@ -24,8 +26,8 @@ def plot_feature_selectors(feature_selectors: dict, name: str, SAVE_PATH: str) -
         plt.plot(
             range(
                 len(results["mean_cindex"]),
-                results["mean_cindex"],
             ),
+            results["mean_cindex"],
             label=selector.title(),
         )
     plt.xlabel("# dimensions")
@@ -183,8 +185,8 @@ def plot_boxplots(experiment_name: str, with_annotations: bool = False) -> None:
     plt.xlabel("Dataset Type", fontsize=12)
     plt.ylabel("C-index", fontsize=12)
     plt.grid(axis="y", linestyle="--", color="grey", alpha=0.7)
-    plt.ylim(0.8, 0.86)
-    plt.yticks(np.arange(0.8, 0.87, 0.01))
+    plt.ylim(0.8, 0.88)
+    plt.yticks(np.arange(0.8, 0.89, 0.01))
     plt.tight_layout()
     plt.xticks([0, 1, 2], ["NMR", "Clinical", "Clinical + NMR"])
     plt.savefig(os.path.join(experiment_name, "boxplot.pdf"))
@@ -204,6 +206,7 @@ def plot_glucose_levels(df: pd.DataFrame) -> None:
         label="Censored",
         alpha=1,
         edgecolor=(0, 0, 0, 0.5),
+        color=sns.color_palette("Set2")[0],
     )
     sns.histplot(
         df[df["CENSORED"] == 0]["GLUC_2"],
@@ -211,6 +214,7 @@ def plot_glucose_levels(df: pd.DataFrame) -> None:
         label="Event",
         alpha=1,
         edgecolor=(0, 0, 0, 0.5),
+        color=sns.color_palette("Set2")[1],
     )
     sns.despine()
 
@@ -241,6 +245,81 @@ def plot_one_spectrum(df: pd.DataFrame) -> None:
     plt.savefig("../../methods/nmr_spectrum.pdf")
 
 
+def plot_multiple_spectra(nmr_df: pd.DataFrame) -> None:
+    """
+    Plot multiple NMR spectra.
+
+    :param nmr_df: df containing the NMR data.
+    """
+    censored_nmr = nmr_df[nmr_df["CENSORED"] == 1]
+    event_nmr = nmr_df[nmr_df["CENSORED"] == 0]
+    censored_nmr = censored_nmr.drop(columns=["CENSORED", "upper_bound", "lower_bound"])
+    event_nmr = event_nmr.drop(columns=["CENSORED", "upper_bound", "lower_bound"])
+
+    fig, ax = plt.subplots(2, 3, figsize=(12, 8), sharey=True)
+    sns.set_palette("Set2")
+    # first two colors
+    color1 = sns.color_palette("Set2")[0]
+    color2 = sns.color_palette("Set2")[1]
+    # plot 3 censored and 3 event participants
+    for i in range(3):
+        one_df_censored = censored_nmr.iloc[i + random.randint(0, 100)]
+        one_df_event = event_nmr.iloc[i + random.randint(0, 100)]
+
+        ax[0, i].plot(
+            [float(i) for i in one_df_censored.index.values],
+            [float(i) for i in one_df_censored.values],
+            linestyle="-",
+            color=color1,
+        )
+        ax[1, i].plot(
+            [float(i) for i in one_df_event.index.values],
+            [float(i) for i in one_df_event.values],
+            linestyle="-",
+            color=color2,
+        )
+        ax[0, i].invert_xaxis()
+        ax[0, i].set_xticklabels([])
+        ax[1, i].invert_xaxis()
+        ax[1, i].tick_params(
+            axis="x", which="both", bottom=True, top=False, labelbottom=True
+        )
+        ax[1, i].set_xlabel("PPM")
+
+    legend_elements = [
+        Line2D([0], [0], color=color1, lw=2, label="Censored"),
+        Line2D([0], [0], color=color2, lw=2, label="Event"),
+    ]
+    ax[0, 2].legend(handles=legend_elements, loc="upper right")
+    ax[0, 0].set_ylabel("Signal Intensity")
+    ax[1, 0].set_ylabel("Signal Intensity")
+
+    ax[0, 0].tick_params(
+        axis="both",
+        which="both",
+        left=True,
+        labelbottom=True,
+        labelleft=True,
+    )
+    ax[1, 0].tick_params(
+        axis="both",
+        which="both",
+        left=True,
+        labelbottom=True,
+        labelleft=True,
+    )
+    sns.despine()
+    sns.set_style("white")
+    fig.suptitle("NMR Spectra of Censored and Event Participants")
+    # create a legend with labels censored and event with colors
+    plt.tight_layout()
+    plt.savefig("../methods/nmr_spectra_comparison.pdf")
+    plt.show()
+    plt.close()
+    plt.cla()
+    plt.clf()
+
+
 def plot_survival(df: pd.DataFrame) -> None:
     """
     Plot the survival times for censoring and event participants.
@@ -263,6 +342,7 @@ def plot_survival(df: pd.DataFrame) -> None:
         alpha=1,
         edgecolor=(0, 0, 0, 0.5),
     )
+    sns.despine()
     plt.gca().set_xticks(np.arange(0, 11, 1))
     plt.gca().set_xlabel("Survival Time in Years")
     plt.gca().set_ylabel("Number of Participants")
@@ -312,3 +392,247 @@ def plot_cumulative_variance() -> None:
     plt.xlim(0, 30)
     plt.grid()
     plt.savefig("../../methods/cumulative_variance.pdf")
+
+
+def plot_difference(nmr_df: pd.DataFrame, features: list | None = None) -> None:
+    """
+    Plot multiple NMR spectra.
+
+    :param nmr_df: df containing the NMR data.
+    :param features: list of features to highlight, defaults to None.
+    """
+    censored_nmr = nmr_df[nmr_df["CENSORED"] == 1]
+    event_nmr = nmr_df[nmr_df["CENSORED"] == 0]
+    censored_nmr = censored_nmr.drop(columns=["CENSORED", "upper_bound", "lower_bound"])
+    event_nmr = event_nmr.drop(columns=["CENSORED", "upper_bound", "lower_bound"])
+
+    event_df = event_nmr.sum(axis=0) / len(event_nmr)
+    censored_df = censored_nmr.sum(axis=0) / len(censored_nmr)
+
+    censored_diff = event_df - censored_df
+    plt.plot(
+        [float(idx) for idx in censored_diff.index],
+        list(censored_diff.values),
+        linestyle="-",
+        label="Difference",
+        color="black",
+    )
+
+    plt.xlabel("PPM")
+    plt.ylabel("Signal Intensity")
+    plt.title(
+        "NMR Spectrum of the Difference between Censored and Event Data", fontsize=12
+    )
+    plt.tick_params(
+        axis="both",
+        which="both",
+        bottom=True,
+        top=False,
+        labelbottom=True,
+        left=True,
+        labelleft=True,
+    )
+    if features:
+        for f in features:
+            plt.axvline(x=float(f), color="green", linestyle="--")
+        plt.legend(["Difference", "Selected Features"])
+        save_path = "../methods/nmr_difference_features.pdf"
+    else:
+        save_path = "../methods/nmr_difference.pdf"
+    sns.despine()
+    plt.gca().invert_xaxis()
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.show()
+    plt.close()
+    plt.cla()
+    plt.clf()
+
+
+def plot_survival_time(
+    true_times: list[float],
+    predicted_times: list[float] | list[list[float]],
+    interval: bool = False,
+    plot_path: str | None = None,
+) -> None:
+    """
+    Plot the true vs predicted survival times.
+
+    :param true_times: true survival times.
+    :param predicted_times: predicted survival times.
+    :param interval: whether to show a prediction interval, defaults to False.
+    :param plot_path: path to save to, defaults to None
+    """
+    true_times = np.array(true_times)
+    predicted_times = np.array(predicted_times)
+
+    # get 2 censored and 3 event participants
+    censored = 0
+    event = 0
+    selected = []
+
+    for i, t in enumerate(true_times):
+        if np.isinf(t) and censored < 2:
+            selected.append(i)
+            censored += 1
+        elif not np.isinf(t) and event < 3:
+            selected.append(i)
+            event += 1
+        if censored == 2 and event == 3:
+            break
+
+    true_times = true_times[selected]
+    predicted_times = predicted_times[selected]
+
+    data = {
+        "patient": ["Patient X", "Patient E", "Patient D", "Patient N", "Patient I"],
+        "actual_event": true_times,
+        "predicted_event": predicted_times,
+    }
+    if isinstance(predicted_times[0], list):
+        data["predicted_event"] = data["predicted_event"].mean(axis=1)
+        data["pred_error"] = data["pred_error"].std(axis=1)
+        interval = True
+    df = pd.DataFrame(data)
+
+    start_study = 0
+    end_study = max(df["predicted_event"])
+    sns.set_theme(style="whitegrid")
+    sns.set_palette("Set2")
+    sns_green, sns_orange = sns.color_palette("Set2")[:2]
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    for i, _ in range(len(df["patient"])):
+        if not np.isinf(df.loc[i, "actual_event"]):
+            maximum = max(df.loc[i, "actual_event"], df.loc[i, "predicted_event"])
+        else:
+            maximum = df.loc[i, "predicted_event"]
+
+        ax.plot(
+            [start_study, maximum],
+            [i, i],
+            "k-",
+            linewidth=1,
+        )
+        if interval:
+            ax.errorbar(
+                df.loc[i, "predicted_event"],
+                i,
+                xerr=df.loc[i, "pred_error"],
+                fmt="X",
+                markersize=10,
+                markeredgewidth=2,
+                capsize=5,
+                color=sns_orange,
+            )
+        else:
+            ax.plot(
+                df.loc[i, "predicted_event"],
+                i,
+                "X",
+                markersize=10,
+                markeredgewidth=2,
+                color=sns_orange,
+            )
+        if df.loc[i, "actual_event"] != np.inf:
+            ax.plot(
+                df.loc[i, "actual_event"],
+                i,
+                "X",
+                markersize=10,
+                markeredgewidth=2,
+                color=sns_green,
+            )
+
+            # Add arrow for ongoing events
+            if df.loc[i, "actual_event"] < end_study:
+                ax.annotate(
+                    "",
+                    xy=(end_study, i),
+                    xytext=(df.loc[i, "actual_event"], i),
+                    arrowprops={
+                        "arrowstyle": "->",
+                        "color": sns_green,
+                        "linestyle": "--",
+                    },
+                    color=sns_orange,
+                )
+        else:
+            ax.annotate(
+                "",
+                xy=(end_study, i),
+                xytext=(df.loc[i, "predicted_event"], i),
+                arrowprops={
+                    "arrowstyle": "->",
+                    "color": sns_orange,
+                    "linestyle": "--",
+                },
+                color=sns_green,
+            )
+
+    ax.set_yticks(range(len(df["patient"])))
+    ax.set_yticklabels(df["patient"])
+    ax.set_xlabel("Survival time in years")
+    ax.set_title("Patient Event Timeline: Actual vs Predicted")
+    ax.plot([], [], "X", label="Event")
+    ax.plot([], [], "X", label="Predicted event")
+    ax.legend()
+    ax.axvline(x=start_study, color="k", linestyle=":", linewidth=1)
+    ax.text(start_study, -0.5, "Present", ha="center", va="top")
+    ax.grid(False)
+    plt.tight_layout()
+    if not plot_path:
+        plt.show()
+    else:
+        print(df)
+        plt.savefig(os.path.join(plot_path, "patient_timeline.pdf"))
+
+
+def plot_survival_sd(
+    true_times: list[float],
+    predicted_times: list[float],
+    std_devs: list[float],
+    show: bool = False,
+) -> None:
+    """
+    Plot the true vs predicted survival times with standard deviations.
+
+    :param true_times: true survival times.
+    :param predicted_times: predicted survival times.
+    :param std_devs: standard deviations.
+    :param show: whether to show or save, defaults to False.
+    """
+    sns_orange = sns.color_palette("Set2")[1]
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.errorbar(
+        true_times,
+        predicted_times,
+        yerr=std_devs,
+        fmt="X",
+        capsize=5,
+        ecolor=sns_orange,
+        markeredgecolor=sns_orange,
+        markerfacecolor=sns_orange,
+    )
+
+    ax.plot(
+        [0, max(true_times)],
+        [0, max(true_times)],
+        "--",
+        label="Perfect prediction",
+        color="black",
+    )
+
+    ax.set_xlabel("True Survival Time")
+    ax.set_ylabel("Predicted Survival Time")
+    ax.set_title("True vs Predicted Survival Times with Standard Deviations")
+    ax.legend()
+
+    ax.grid(True, linestyle="--", alpha=0.7)
+
+    plt.tight_layout()
+    if show:
+        plt.show()
+    else:
+        plt.savefig("../../methods/survival_sd.pdf")
