@@ -59,10 +59,22 @@ def plot_shap(
     plt.xlabel("SHAP Value (Impact on Model Output)", fontsize=14)
     plt.grid(axis="x", linestyle="--", color="grey", alpha=0.7)
     plt.xticks(fontsize=8)
+    features_map = {
+        "GLUC_2": "Glucose",
+        "WAIST_2B": "Waist circumference",
+        "ANTIHYP_2B": "Antihypertensive medication",
+        "TGL_2": "Triglycerides",
+        "Creat_NC2": "Creatinine",
+        "V30_2B": "Years of smoking",
+        "RACE": "Race",
+        "CRP_2": "C-reactive protein",
+    }
     # rename the features with more than 4 decimals
     feature_names = [
-        f"{float(f):.4f}" if len(str(f)) > 14 else f for f in best_features
+        f"{float(f):.4f} ppm" if len(str(f)) > 14 else features_map[f]
+        for f in best_features
     ]
+
     shap.summary_plot(
         shap_values,
         train_dataset.X_train[best_features],
@@ -164,9 +176,15 @@ def plot_boxplots(experiment_name: str, with_annotations: bool = False) -> None:
         y="C-index",
         palette="pastel",
         linewidth=1.5,
+        showmeans=True,
+        meanprops={
+            "marker": "d",
+            "markerfacecolor": "black",
+            "markeredgecolor": "black",
+        },
         order=["Nmr", "Clinical", "Full"],
     )
-
+    sns.despine()
     if with_annotations:
         medians = all_results.groupby("Dataset")["C-index"].median()
         for i, dataset in enumerate(["Nmr", "Clinical", "Full"]):
@@ -181,8 +199,7 @@ def plot_boxplots(experiment_name: str, with_annotations: bool = False) -> None:
                 color="black",
             )
 
-    plt.title("C-index Comparison Between Datasets", fontsize=14)
-    plt.xlabel("Dataset Type", fontsize=12)
+    plt.xlabel("Dataset", fontsize=12)
     plt.ylabel("C-index", fontsize=12)
     plt.grid(axis="y", linestyle="--", color="grey", alpha=0.7)
     plt.ylim(0.8, 0.88)
@@ -450,7 +467,7 @@ def plot_difference(nmr_df: pd.DataFrame, features: list | None = None) -> None:
 
 
 def plot_survival_time(
-    true_times: list[float],
+    test_dataset: SurvivalDataset,
     predicted_times: list[float] | list[list[float]],
     interval: bool = False,
     plot_path: str | None = None,
@@ -458,12 +475,12 @@ def plot_survival_time(
     """
     Plot the true vs predicted survival times.
 
-    :param true_times: true survival times.
+    :param test_dataset: true survival times (dataset).
     :param predicted_times: predicted survival times.
     :param interval: whether to show a prediction interval, defaults to False.
     :param plot_path: path to save to, defaults to None
     """
-    true_times = np.array(true_times)
+    upper_bound = np.array(test_dataset.y_upper_bound)
     predicted_times = np.array(predicted_times)
 
     # get 2 censored and 3 event participants
@@ -471,7 +488,7 @@ def plot_survival_time(
     event = 0
     selected = []
 
-    for i, t in enumerate(true_times):
+    for i, t in enumerate(upper_bound):
         if np.isinf(t) and censored < 2:
             selected.append(i)
             censored += 1
@@ -481,32 +498,34 @@ def plot_survival_time(
         if censored == 2 and event == 3:
             break
 
-    true_times = true_times[selected]
+    true_times = test_dataset.y_upper_bound[selected]
+    true_times_lower = test_dataset.y_lower_bound[selected]
     predicted_times = predicted_times[selected]
 
     data = {
         "patient": ["Patient X", "Patient E", "Patient D", "Patient N", "Patient I"],
         "actual_event": true_times,
         "predicted_event": predicted_times,
+        "censored": [np.isinf(t) for t in true_times],
     }
     if isinstance(predicted_times[0], list):
         data["predicted_event"] = data["predicted_event"].mean(axis=1)
         data["pred_error"] = data["pred_error"].std(axis=1)
         interval = True
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(data).reset_index(drop=True)
 
     start_study = 0
     end_study = max(df["predicted_event"])
     sns.set_theme(style="whitegrid")
     sns.set_palette("Set2")
-    sns_green, sns_orange = sns.color_palette("Set2")[:2]
+    sns_green, sns_orange, sns_blue = sns.color_palette("Set2")[:3]
     fig, ax = plt.subplots(figsize=(12, 6))
 
     for i in range(len(df["patient"])):
-        if not np.isinf(df.loc[i, "actual_event"]):
-            maximum = max(df.loc[i, "actual_event"], df.loc[i, "predicted_event"])
+        if not df.loc[i, "censored"]:
+            maximum = min(df.loc[i, "actual_event"], df.loc[i, "predicted_event"])
         else:
-            maximum = df.loc[i, "predicted_event"]
+            maximum = max(true_times_lower[i], df.loc[i, "predicted_event"])
 
         ax.plot(
             [start_study, maximum],
@@ -514,26 +533,7 @@ def plot_survival_time(
             "k-",
             linewidth=1,
         )
-        if interval:
-            ax.errorbar(
-                df.loc[i, "predicted_event"],
-                i,
-                xerr=df.loc[i, "pred_error"],
-                fmt="X",
-                markersize=10,
-                markeredgewidth=2,
-                capsize=5,
-                color=sns_orange,
-            )
-        else:
-            ax.plot(
-                df.loc[i, "predicted_event"],
-                i,
-                "X",
-                markersize=10,
-                markeredgewidth=2,
-                color=sns_orange,
-            )
+
         if df.loc[i, "actual_event"] != np.inf:
             ax.plot(
                 df.loc[i, "actual_event"],
@@ -541,7 +541,7 @@ def plot_survival_time(
                 "X",
                 markersize=10,
                 markeredgewidth=2,
-                color=sns_green,
+                color=sns_orange,
             )
 
             # Add arrow for ongoing events
@@ -552,28 +552,58 @@ def plot_survival_time(
                     xytext=(df.loc[i, "actual_event"], i),
                     arrowprops={
                         "arrowstyle": "->",
-                        "color": sns_green,
+                        "color": sns_orange,
                         "linestyle": "--",
                     },
                     color=sns_orange,
                 )
         else:
+            ax.plot(
+                true_times_lower[i],
+                i,
+                "X",
+                markersize=10,
+                markeredgewidth=2,
+                color=sns_green,
+            )
             ax.annotate(
                 "",
                 xy=(end_study, i),
                 xytext=(df.loc[i, "predicted_event"], i),
                 arrowprops={
                     "arrowstyle": "->",
-                    "color": sns_orange,
+                    "color": sns_blue,
                     "linestyle": "--",
                 },
-                color=sns_green,
+                color=sns_blue,
+            )
+
+        if interval:
+            ax.errorbar(
+                df.loc[i, "predicted_event"],
+                i,
+                xerr=df.loc[i, "pred_error"],
+                fmt="X",
+                markersize=10,
+                markeredgewidth=2,
+                capsize=5,
+                color=sns_blue,
+            )
+        else:
+            ax.plot(
+                df.loc[i, "predicted_event"],
+                i,
+                "X",
+                markersize=10,
+                markeredgewidth=2,
+                color=sns_blue,
             )
 
     ax.set_yticks(range(len(df["patient"])))
     ax.set_yticklabels(df["patient"])
     ax.set_xlabel("Survival time in years")
     ax.set_title("Patient Event Timeline: Actual vs Predicted")
+    ax.plot([], [], "X", label="Censored")
     ax.plot([], [], "X", label="Event")
     ax.plot([], [], "X", label="Predicted event")
     ax.legend()
@@ -586,28 +616,51 @@ def plot_survival_time(
     else:
         print(df)
         plt.savefig(os.path.join(plot_path, "patient_timeline.pdf"))
+    ax.cla()
+    plt.cla()
+    plt.clf()
+    plt.close()
 
 
 def plot_survival_sd(
-    true_times: list[float],
+    test_dataset: SurvivalDataset,
     predicted_times: list[float],
-    std_devs: list[float],
+    std_devs: list[float] | None = None,
     show: bool = False,
+    plot_path: str | None = None,
 ) -> None:
     """
     Plot the true vs predicted survival times with standard deviations.
 
-    :param true_times: true survival times.
+    :param test_dataset: test dataset.
     :param predicted_times: predicted survival times.
     :param std_devs: standard deviations.
     :param show: whether to show or save, defaults to False.
+    :param plot_path: path to save to, defaults to None
     """
-    sns_orange = sns.color_palette("Set2")[1]
+    sns_green, sns_orange = sns.color_palette("Set2")[:2]
     fig, ax = plt.subplots(figsize=(10, 6))
 
+    if std_devs is None:
+        std_devs = [0] * len(test_dataset.y_lower_bound)
+
+    censored_indices = [
+        i
+        for i in range(len(test_dataset.y_upper_bound))
+        if np.isinf(test_dataset.y_upper_bound[i])
+    ]
+    true_times_event = test_dataset.y_lower_bound[
+        [i for i in range(len(test_dataset.y_upper_bound)) if i not in censored_indices]
+    ]
+    true_times_censored = test_dataset.y_lower_bound[censored_indices]
+
+    predicted_times_event = [
+        [i for i in range(len(test_dataset.y_upper_bound)) if i not in censored_indices]
+    ]
+    predicted_times_censored = predicted_times[censored_indices]
     ax.errorbar(
-        true_times,
-        predicted_times,
+        true_times_event,
+        predicted_times_event,
         yerr=std_devs,
         fmt="X",
         capsize=5,
@@ -615,10 +668,19 @@ def plot_survival_sd(
         markeredgecolor=sns_orange,
         markerfacecolor=sns_orange,
     )
-
+    ax.errorbar(
+        true_times_censored,
+        predicted_times_censored,
+        yerr=std_devs,
+        fmt="X",
+        capsize=5,
+        ecolor=sns_green,
+        markeredgecolor=sns_green,
+        markerfacecolor=sns_green,
+    )
     ax.plot(
-        [0, max(true_times)],
-        [0, max(true_times)],
+        [0, max(true_times_event)],
+        [0, max(true_times_event)],
         "--",
         label="Perfect prediction",
         color="black",
@@ -635,4 +697,4 @@ def plot_survival_sd(
     if show:
         plt.show()
     else:
-        plt.savefig("../../methods/survival_sd.pdf")
+        plt.savefig(os.path.join(plot_path, "survival_vs_sd.pdf"))

@@ -97,15 +97,14 @@ def test_model(
         test_dataset.y_lower_bound,
         test_dataset.y_upper_bound,
     )
+    predicted_times = clf.predict(dtest) * scale
     cindex, censoring_acc, mae_observed = c_index(
         test_dataset.y_lower_bound,
         test_dataset.y_upper_bound,
-        clf.predict(dtest) * scale,
-    )
-    plot_survival_time(
-        test_dataset.y_upper_bound, clf.predict(dtest) * scale, plot_path=plot_path
+        predicted_times,
     )
     plot_shap(clf, train_dataset, best_features, plot_path=plot_path)
+    plot_survival_time(test_dataset, predicted_times, plot_path=plot_path)
     return cindex, censoring_acc, mae_observed
 
 
@@ -386,7 +385,7 @@ def tune_hp(
         "objective": ["survival:aft"],
         "eval_metric": ["aft-nloglik"],
         "aft_loss_distribution": ["normal", "extreme"],
-        "aft_loss_distribution_scale": [0.01, 0.05, 0.1, 0.25],
+        "aft_loss_distribution_scale": [0.1],
         "tree_method": ["hist"],
         "booster": ["gbtree"],
         "grow_policy": ["lossguide"],
@@ -401,6 +400,7 @@ def tune_hp(
         "aft_loss_distribution",
         "aft_loss_distribution_scale",
         "alpha",
+        "lambda",
     ]
     results = {}
     combinations = list(itertools.product(*param_grid.values()))
@@ -434,16 +434,16 @@ def tune_hp_bagging(
     :return: dictionary of results.
     """
     param_grid = {
-        "n_models": [10, 25, 50, 75, 100],
+        "n_models": [25, 50, 75, 100],
         "subset_fraction": [
-            (0.6, 0.4),
             (0.6, 0.6),
-            (0.8, 0.4),
+            (0.6, 0.8),
             (0.8, 0.6),
             (0.8, 0.8),
-            (1.0, 0.4),
             (1.0, 0.6),
+            (0.6, 1.0),
             (1.0, 0.8),
+            (0.8, 1.0),
             (1.0, 1.0),
         ],
         "aggregation": ["mean", "median"],

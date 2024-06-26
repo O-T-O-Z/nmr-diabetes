@@ -17,7 +17,7 @@ from runner_functions import (
     tune_hp,
     tune_hp_bagging,
 )
-from utils import get_best_features_and_params, load_best_features
+from utils import calculate_mcc, get_best_features_and_params, load_best_features
 from visualization import plot_boxplots
 
 
@@ -135,7 +135,7 @@ def perform_test(
     func = test_model_bagging if bagging else test_model
     kwargs = bagging_params if bagging else {}
 
-    for random_state in [84, 110, 1750]:
+    for random_state in [84, 110, 1750, 2024, 7041]:
         cindex, censoring_acc, mae_observed = func(
             train_dataset,
             test_dataset,
@@ -148,11 +148,7 @@ def perform_test(
             **kwargs,
         )
 
-        print("Test C-index: ", cindex)
-        print("Test Censoring accuracy: ", censoring_acc)
-        print("Test MAE observed: ", mae_observed)
         all_results.loc[random_state] = [cindex, censoring_acc, mae_observed]
-        print("------------")
 
     print("Final results:")
     means = all_results.mean()
@@ -160,6 +156,57 @@ def perform_test(
     for col in all_results.columns:
         print(f"{col}: {means[col]:.2f} ± {stds[col]:.2f}")
     return all_results
+
+
+def save_table(save_path: str) -> None:
+    """
+    Save the results table to a latex file.
+
+    :param save_path: path to save the results.
+    """
+    all_df = pd.DataFrame(
+        columns=[
+            "C-index",
+            "\text{Acc}_{\text{censored}}",
+            "\text{MAE}_{\text{event}}",
+            "MCC",
+        ],
+        index=["nmr", "clinical", "full"],
+    )
+
+    for f in os.listdir(save_path):
+        if f.endswith(".csv"):
+            df = pd.read_csv(os.path.join(save_path, f))
+            ds = f.split("_")[-1].split(".csv")[0]
+            mcc = calculate_mcc(
+                df["C-index"], df["Censoring accuracy"], df["MAE observed"]
+            )
+            mcc = f"{round(mcc.mean(), 3)} ± {round(mcc.std(), 3)}"
+            c_index = (
+                f"{round(df['C-index'].mean(), 3)} ± {round(df['C-index'].std(), 3)}"
+            )
+            cens_acc = f"{round(df['Censoring accuracy'].mean(), 3)} ± \
+                {round(df['Censoring accuracy'].std(), 3)}"
+            mae = f"{round(df['MAE observed'].mean(), 3)} ± {round(df['MAE observed'].std(), 3)}"
+
+            all_df.loc[ds, "C-index"] = c_index
+            all_df.loc[ds, "\text{Acc}_{\text{censored}}"] = cens_acc
+            all_df.loc[ds, "\text{MAE}_{\text{event}}"] = mae
+            all_df.loc[ds, "MCC"] = mcc
+
+    # rename indices
+    all_df.rename(
+        index={"nmr": "NMR", "clinical": "Clinical", "full": "Clinical + NMR"},
+        inplace=True,
+    )
+    all_df.to_latex(
+        os.path.join(save_path, "results_table.tex"),
+        multirow=True,
+        bold_rows=True,
+        caption="XGB-AFT model performance on each dataset.",
+        label="tab:results_ex2",
+        float_format="%.3f",
+    )
 
 
 def main() -> None:
@@ -252,6 +299,7 @@ def main() -> None:
             bagging_params,
         )
         all_results.to_csv(f"{save_path}/test_results_{d}.csv")
+    save_table(save_path)
     plot_boxplots(save_path)
 
 

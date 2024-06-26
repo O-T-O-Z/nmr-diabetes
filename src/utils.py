@@ -66,7 +66,7 @@ def calculate_mcc(cindex: float, censoring_acc: float, mae_observed: float) -> f
     :param mae_observed: mean absolute error of event data.
     :return: MCC score.
     """
-    return max((cindex * 4 + censoring_acc + np.exp(-mae_observed) * 2) / 7, 0)
+    return (cindex * 4 + censoring_acc + np.exp(-mae_observed) * 2) / 7
 
 
 def load_feature_selection(file_name: str, X: pd.DataFrame) -> list:
