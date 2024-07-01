@@ -1,13 +1,27 @@
+import ast
 import json
 import logging
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
 from deepsurv import DeepSurv
 from numpy import float32, int32
 
-from src.runner_functions import SurvivalDataset
-from utils import load_best_features
+from survival_dataset import SurvivalDataset
+
+
+def load_best_features(filename: str) -> list:
+    """
+    Load the best features from a file.
+
+    :param filename: file name of the best features.
+    :return: list of best features.
+    """
+    with open(filename, "r") as f:
+        best_features = f.read()
+    return ast.literal_eval(best_features)
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,24 +48,22 @@ def create_data(
     }
 
 
-def load_datasets(ds_name: str) -> tuple[dict, dict, dict, int]:
+def load_datasets(ds_name: str) -> Tuple[Dict, Dict, Dict, int]:
     """
     Load the datasets as a dictionary.
 
     :param ds_name: name of the dataset.
     :return: train, validation and test data.
     """
-    train_dataset = SurvivalDataset()
+    train_dataset = SurvivalDataset(prefix="../../datasets.nosync/")
     train_dataset.load_data(f"{ds_name}_train.csv")
-    test_dataset = SurvivalDataset()
+    test_dataset = SurvivalDataset(prefix="../../datasets.nosync/")
     test_dataset.load_data(f"{ds_name}_test.csv")
 
-    if ds_name in ["clinical", "nmr"]:
-        best_features = load_best_features(f"../results_fs/{ds_name}_best_features.txt")
-    else:
+    if ds_name in ["clinical", "nmr", "full"]:
         best_features = load_best_features(
-            "../results_fs/clinical_best_features.txt"
-        ) + load_best_features("../results_fs/nmr_best_features.txt")
+            f"../../results_fs/{ds_name}_best_features.txt"
+        )
     train_dataset.split()
 
     train_data = create_data(
@@ -104,10 +116,10 @@ if __name__ == "__main__":
     for ds_name in ["full", "clinical", "nmr"]:
         train_data, valid_data, test_data, n_features = load_datasets(ds_name)
         hyperparams = load_hyperparams(
-            f"../results_models/deepsurv/{ds_name}_best_params.json", n_features
+            f"../../results_models/deepsurv/{ds_name}_best_params.json", n_features
         )
         res = {"DeepSurv": []}
-        for random_state in [42, 55, 875]:
+        for random_state in [84, 110, 1750, 2024, 7041]:
             np.random.seed(random_state)
             network = DeepSurv(**hyperparams)
 
@@ -123,4 +135,6 @@ if __name__ == "__main__":
             results_df = pd.DataFrame(res)
             print(results_df)
         results_df = pd.DataFrame(res)
-        results_df.to_csv(f"../results_models/deepsurv/{ds_name}_deepsurv_results.csv")
+        results_df.to_csv(
+            f"../../results_models/deepsurv/{ds_name}_deepsurv_results.csv"
+        )

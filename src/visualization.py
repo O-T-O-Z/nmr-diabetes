@@ -500,17 +500,21 @@ def plot_survival_time(
 
     true_times = test_dataset.y_upper_bound[selected]
     true_times_lower = test_dataset.y_lower_bound[selected]
-    predicted_times = predicted_times[selected]
+    if isinstance(predicted_times[0], np.ndarray):
+        predicted_times = predicted_times[:, selected]
+    else:
+        predicted_times = predicted_times[selected]
 
     data = {
         "patient": ["Patient X", "Patient E", "Patient D", "Patient N", "Patient I"],
         "actual_event": true_times,
         "predicted_event": predicted_times,
         "censored": [np.isinf(t) for t in true_times],
+        "pred_error": "",
     }
-    if isinstance(predicted_times[0], list):
-        data["predicted_event"] = data["predicted_event"].mean(axis=1)
-        data["pred_error"] = data["pred_error"].std(axis=1)
+    if isinstance(predicted_times[0], np.ndarray):
+        data["predicted_event"] = data["predicted_event"].mean(axis=0)
+        data["pred_error"] = data["predicted_event"].std(axis=0)
         interval = True
     df = pd.DataFrame(data).reset_index(drop=True)
 

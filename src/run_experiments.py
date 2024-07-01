@@ -110,6 +110,7 @@ def perform_test(
     test_dataset: SurvivalDataset,
     best_features: list,
     best_params: dict,
+    ds: str,
     scale: float = 1.0,
     plot_path: str = None,
     bagging: bool = False,
@@ -122,6 +123,7 @@ def perform_test(
     :param test_dataset: test dataset.
     :param best_features: best features to use.
     :param best_params: best parameters to use.
+    :param ds: dataset name.
     :param scale: scale to scale the predictions by, defaults to 1.0.
     :param plot_path: path to store plots, defaults to None.
     :param bagging: whether bagging is tested, defaults to False.
@@ -142,6 +144,7 @@ def perform_test(
             best_features,
             best_params,
             random_state,
+            ds=ds,
             early_stopping_rounds=50,
             scale=scale,
             plot_path=plot_path,
@@ -234,6 +237,7 @@ def main() -> None:
     save_path = os.path.join(
         "experiments", str(args.save) + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     )
+    save_path = "experiments/bagging2024-06-26_11-54-15"
 
     os.makedirs(save_path, exist_ok=True)
     datasets = [
@@ -267,6 +271,7 @@ def main() -> None:
                 bagging=True,
                 best_params=best_params,
             )
+            print("Best bagging params:", bagging_params)
         else:
             bagging_params = {}
         if not args.bagging:
@@ -293,6 +298,7 @@ def main() -> None:
             dataset_test,
             best_features,
             best_params,
+            d,
             1.0,
             save_path,
             args.bagging,

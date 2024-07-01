@@ -1,5 +1,6 @@
 import itertools
 import json
+import os
 
 import numpy as np
 import xgboost as xgb
@@ -114,6 +115,7 @@ def test_model_bagging(
     best_features: list,
     best_params: dict,
     random_state: int,
+    ds: str,
     early_stopping_rounds: int = 50,
     scale: float = 1.0,
     plot_path: str | None = None,
@@ -130,6 +132,7 @@ def test_model_bagging(
     :param best_features: list of best features.
     :param best_params: best parameters for the model.
     :param random_state: random state for the test.
+    :param ds: dataset to use.
     :param early_stopping_rounds: early stopping rounds, defaults to 50.
     :param scale: scales the predictions, defaults to 1.0.
     :param plot_path: path to save SHAP plot, defaults to None.
@@ -162,7 +165,9 @@ def test_model_bagging(
         test_dataset.y_lower_bound,
         test_dataset.y_upper_bound,
     )
-    ys = np.array([m.predict(dtest) for m in models])
+    ys = np.array([m.predict(dtest) * scale for m in models])
+    with open(os.path.join(plot_path, f"ys_{ds}.npy"), "wb") as f:
+        np.save(f, ys)
     if aggregation == "mean":
         mean = np.mean(ys, axis=0)
         stdev = np.std(ys, axis=0) * 1.96

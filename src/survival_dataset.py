@@ -29,9 +29,13 @@ class SurvivalDataset(BaseModel):
 
         arbitrary_types_allowed = True
 
-    def __init__(self, **kwargs) -> None:
-        """Initialize the SurvivalDataset class."""
-        super().__init__(prefix="../datasets.nosync/", **kwargs)
+    def __init__(self, prefix: str = "../datasets.nosync/", **kwargs) -> None:
+        """
+        Initialize the SurvivalDataset class.
+
+        :param prefix: prefix of dataset path defaults to "../datasets.nosync/"
+        """
+        super().__init__(prefix=prefix, **kwargs)
 
     def load_data(self, filename: str) -> None:
         """

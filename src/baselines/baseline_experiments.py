@@ -7,7 +7,7 @@ from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV, KFold
 from sksurv.ensemble import GradientBoostingSurvivalAnalysis, RandomSurvivalForest
 
-from src.runner_functions import SurvivalDataset
+from runner_functions import SurvivalDataset
 from utils import load_best_features
 
 
@@ -112,18 +112,24 @@ def load_datasets(
     :param ds_name: name of the dataset to load.
     :return: DataFrame and numpy array of the dataset.
     """
-    train_dataset = SurvivalDataset()
+    train_dataset = SurvivalDataset(prefix="../../datasets.nosync/")
     train_dataset.load_data(f"{ds_name}_train.csv")
-    test_dataset = SurvivalDataset()
+    test_dataset = SurvivalDataset(prefix="../../datasets.nosync/")
     test_dataset.load_data(f"{ds_name}_test.csv")
 
     if ds_name in ["clinical", "nmr"]:
-        best_features = load_best_features(f"../results_fs/{ds_name}_best_features.txt")
+        best_features = load_best_features(
+            f"../../results_fs/{ds_name}_best_features.txt"
+        )
     else:
         best_features = load_best_features(
-            "../results_fs/clinical_best_features.txt"
-        ) + load_best_features("../results_fs/nmr_best_features.txt")
+            "../../results_fs/clinical_best_features.txt"
+        ) + load_best_features("../../results_fs/nmr_best_features.txt")
     train_dataset.split()
+
+    test_dataset.X_train = train_dataset.X
+    test_dataset.y_lower_bound_train = train_dataset.y_lower_bound
+    test_dataset.y_upper_bound_train = train_dataset.y_upper_bound
 
     return (
         create_df_and_array(train_dataset, best_features),
@@ -224,9 +230,11 @@ def fit_survival_trees(
 
 if __name__ == "__main__":
     for ds_name in ["full", "clinical", "nmr"]:
-        df, data_x, data_y, test_df, test_data_x, test_data_y = load_datasets(ds_name)
+        train, test = load_datasets(ds_name)
+        df, data_x, data_y = train
+        test_df, test_data_x, test_data_y = test
         res = {"CoxPH": [], "RSF": [], "GBS": []}
-        for random_state in [42, 55, 875]:
+        for random_state in [84, 110, 1750, 2024, 7041]:
             res["CoxPH"].append(
                 fit_coxph(
                     df,
@@ -241,4 +249,6 @@ if __name__ == "__main__":
                 res[key].append(value)
         results_df = pd.DataFrame(res)
         print(results_df)
-        results_df.to_csv(f"../results_models/baselines/{ds_name}_baseline_results.csv")
+        results_df.to_csv(
+            f"../../results_models/baselines/{ds_name}_baseline_results.csv"
+        )
