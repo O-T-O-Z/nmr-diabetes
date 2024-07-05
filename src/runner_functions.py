@@ -70,6 +70,7 @@ def test_model(
     best_features: list,
     best_params: dict,
     random_state: int,
+    ds: str,
     early_stopping_rounds: int = 50,
     scale: float = 1.0,
     plot_path: str | None = None,
@@ -82,6 +83,7 @@ def test_model(
     :param best_features: list of best features.
     :param best_params: best parameters for the model.
     :param random_state: random state for the test.
+    :param ds: dataset to use.
     :param early_stopping_rounds: early stopping rounds, defaults to 50.
     :param scale: scales the predictions, defaults to 1.0.
     :param plot_path: path to save SHAP plot, defaults to None.
@@ -98,14 +100,25 @@ def test_model(
         test_dataset.y_lower_bound,
         test_dataset.y_upper_bound,
     )
+    dtrain = convert_to_dmatrix(
+        train_dataset.X[best_features],
+        train_dataset.y_lower_bound,
+        train_dataset.y_upper_bound,
+    )
     predicted_times = clf.predict(dtest) * scale
+    with open(os.path.join(plot_path, f"ys_train_{ds}.npy"), "wb") as f:
+        np.save(f, clf.predict(dtrain) * scale)
+
+    with open(os.path.join(plot_path, f"ys_test_{ds}.npy"), "wb") as f:
+        np.save(f, predicted_times * scale)
     cindex, censoring_acc, mae_observed = c_index(
         test_dataset.y_lower_bound,
         test_dataset.y_upper_bound,
         predicted_times,
     )
-    plot_shap(clf, train_dataset, best_features, plot_path=plot_path)
-    plot_survival_time(test_dataset, predicted_times, plot_path=plot_path)
+    if ds == "full":
+        plot_shap(clf, test_dataset, best_features, plot_path=plot_path)
+        plot_survival_time(test_dataset, predicted_times, plot_path=plot_path)
     return cindex, censoring_acc, mae_observed
 
 
@@ -165,8 +178,16 @@ def test_model_bagging(
         test_dataset.y_lower_bound,
         test_dataset.y_upper_bound,
     )
+    dtrain = convert_to_dmatrix(
+        train_dataset.X[best_features],
+        train_dataset.y_lower_bound,
+        train_dataset.y_upper_bound,
+    )
     ys = np.array([m.predict(dtest) * scale for m in models])
-    with open(os.path.join(plot_path, f"ys_{ds}.npy"), "wb") as f:
+    ys_train = np.array([m.predict(dtrain) * scale for m in models])
+    with open(os.path.join(plot_path, f"ys_train_{ds}.npy"), "wb") as f:
+        np.save(f, ys_train)
+    with open(os.path.join(plot_path, f"ys_test_{ds}.npy"), "wb") as f:
         np.save(f, ys)
     if aggregation == "mean":
         mean = np.mean(ys, axis=0)
@@ -183,7 +204,9 @@ def test_model_bagging(
         test_dataset.y_upper_bound,
         ypred,  # type: ignore
     )
-    plot_shap(models[0], train_dataset, best_features, plot_path=plot_path)
+    if ds == "full":
+        plot_shap(models, test_dataset, best_features, plot_path=plot_path)
+        plot_survival_time(test_dataset, ys, interval=True, plot_path=plot_path)
     return cindex, censoring_acc, mae_observed
 
 
@@ -217,12 +240,12 @@ def cross_validate_model(
             fold_dataset,
             xgbparams,
             plot,
-            eval_metric="mcc" if use_mcc else "cindex",
+            eval_metric="mcc" if use_mcc else "all",
             early_stopping_rounds=early_stopping_rounds,
         )
 
         results.append(res)
-    return np.mean(results)
+    return results
 
 
 def cross_validate_model_bagging(
@@ -255,7 +278,7 @@ def cross_validate_model_bagging(
     :return: mean evaluation metric.
     """
     results = []
-    eval_metric = "mcc" if use_mcc else "cindex"
+    eval_metric = "mcc" if use_mcc else "all"
     folds = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=k_fold_seed)
     for train_index, valid_index in folds.split(dataset.X, dataset.censored):
         models = []
@@ -312,8 +335,10 @@ def cross_validate_model_bagging(
             res = cindex
         elif eval_metric == "mcc":
             res = calculate_mcc(cindex, censoring_acc, mae_observed)
+        else:
+            res = cindex, censoring_acc, mae_observed
         results.append(res)
-    return np.mean(results)
+    return results
 
 
 def cross_validate_model_scale_search(

@@ -7,6 +7,7 @@ import pandas as pd
 import seaborn as sns
 import shap
 from matplotlib.lines import Line2D
+from scipy.stats import norm
 from sklearn.base import BaseEstimator
 from sklearn.decomposition import PCA
 
@@ -40,8 +41,8 @@ def plot_feature_selectors(feature_selectors: dict, name: str, SAVE_PATH: str) -
 
 
 def plot_shap(
-    clf: BaseEstimator,
-    train_dataset: SurvivalDataset,
+    clf: BaseEstimator | list[BaseEstimator],
+    test_dataset: SurvivalDataset,
     best_features: list,
     plot_path: str | None = None,
 ) -> None:
@@ -49,12 +50,21 @@ def plot_shap(
     Calculate and plot SHAP values for the best features.
 
     :param clf: trained model.
-    :param train_dataset: training dataset.
+    :param test_dataset: training dataset.
     :param best_features: list of best features.
     :param plot_path: path to save to, defaults to None
     """
-    explainer = shap.TreeExplainer(clf)
-    shap_values = explainer.shap_values(train_dataset.X_train[best_features])
+    if isinstance(clf, list):
+        shap_values_list = []
+        for model in clf:
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(test_dataset.X[best_features])
+            shap_values_list.append(shap_values)
+        stacked_shap_values = np.stack(shap_values_list, axis=0)
+        shap_values = np.mean(stacked_shap_values, axis=0)
+    else:
+        explainer = shap.TreeExplainer(clf)
+        shap_values = explainer.shap_values(test_dataset.X[best_features])
 
     plt.xlabel("SHAP Value (Impact on Model Output)", fontsize=14)
     plt.grid(axis="x", linestyle="--", color="grey", alpha=0.7)
@@ -77,7 +87,7 @@ def plot_shap(
 
     shap.summary_plot(
         shap_values,
-        train_dataset.X_train[best_features],
+        test_dataset.X[best_features],
         feature_names=feature_names,
         color_bar=True,
         show=False,
@@ -153,7 +163,7 @@ def plot_boxplots(experiment_name: str, with_annotations: bool = False) -> None:
     """
     all_results = {}
     for f in os.listdir(experiment_name):
-        if f.endswith(".csv"):
+        if f.endswith(".csv") and "test_results" in f:
             dataset = f.split(".csv")[0].split("test_results_")[-1].title()
             all_results[dataset] = pd.read_csv(f"{experiment_name}/{f}")
             all_results[dataset]["Dataset"] = dataset
@@ -201,6 +211,8 @@ def plot_boxplots(experiment_name: str, with_annotations: bool = False) -> None:
 
     plt.xlabel("Dataset", fontsize=12)
     plt.ylabel("C-index", fontsize=12)
+    plt.tick_params(axis="x", which="both", bottom=True, top=False, labelbottom=True)
+    plt.tick_params(axis="y", which="both", left=True, right=False, labelbottom=True)
     plt.grid(axis="y", linestyle="--", color="grey", alpha=0.7)
     plt.ylim(0.8, 0.88)
     plt.yticks(np.arange(0.8, 0.89, 0.01))
@@ -371,13 +383,13 @@ def plot_survival(df: pd.DataFrame) -> None:
 
 def plot_cumulative_variance() -> None:
     """Plot the cumulative variance explained by the principal components."""
-    X_train_nmr = pd.read_csv("../../datasets.nosync/nmr_train.csv")
+    X_train_nmr = pd.read_csv("../datasets.nosync/nmr_train.csv")
     X_train_nmr = X_train_nmr.drop(columns=["CENSORED", "upper_bound", "lower_bound"])
     pca_nmr = PCA()
     pca_nmr.fit(X_train_nmr)
     cumulative_variance_nmr = np.cumsum(pca_nmr.explained_variance_ratio_)
 
-    X_train_clinical = pd.read_csv("../../datasets.nosync/clinical_train.csv")
+    X_train_clinical = pd.read_csv("../datasets.nosync/clinical_train.csv")
     X_train_clinical = X_train_clinical.drop(
         columns=["CENSORED", "upper_bound", "lower_bound"]
     )
@@ -408,7 +420,7 @@ def plot_cumulative_variance() -> None:
     plt.legend(loc="lower right")
     plt.xlim(0, 30)
     plt.grid()
-    plt.savefig("../../methods/cumulative_variance.pdf")
+    plt.savefig("../methods/cumulative_variance.pdf")
 
 
 def plot_difference(nmr_df: pd.DataFrame, features: list | None = None) -> None:
@@ -519,7 +531,10 @@ def plot_survival_time(
     df = pd.DataFrame(data).reset_index(drop=True)
 
     start_study = 0
-    end_study = max(df["predicted_event"])
+    ind = df["predicted_event"].argmax()
+    end_study = df.iloc[ind]["predicted_event"]
+    if interval:
+        end_study += df.iloc[ind]["pred_error"]
     sns.set_theme(style="whitegrid")
     sns.set_palette("Set2")
     sns_green, sns_orange, sns_blue = sns.color_palette("Set2")[:3]
@@ -530,6 +545,8 @@ def plot_survival_time(
             maximum = min(df.loc[i, "actual_event"], df.loc[i, "predicted_event"])
         else:
             maximum = max(true_times_lower[i], df.loc[i, "predicted_event"])
+            if interval:
+                maximum += df.loc[i, "pred_error"]
 
         ax.plot(
             [start_study, maximum],
@@ -569,6 +586,7 @@ def plot_survival_time(
                 markersize=10,
                 markeredgewidth=2,
                 color=sns_green,
+                zorder=10,
             )
             ax.annotate(
                 "",
@@ -580,6 +598,7 @@ def plot_survival_time(
                     "linestyle": "--",
                 },
                 color=sns_blue,
+                zorder=10,
             )
 
         if interval:
@@ -592,6 +611,7 @@ def plot_survival_time(
                 markeredgewidth=2,
                 capsize=5,
                 color=sns_blue,
+                zorder=10,
             )
         else:
             ax.plot(
@@ -601,6 +621,7 @@ def plot_survival_time(
                 markersize=10,
                 markeredgewidth=2,
                 color=sns_blue,
+                zorder=10,
             )
 
     ax.set_yticks(range(len(df["patient"])))
@@ -614,11 +635,14 @@ def plot_survival_time(
     ax.axvline(x=start_study, color="k", linestyle=":", linewidth=1)
     ax.text(start_study, -0.5, "Present", ha="center", va="top")
     ax.grid(False)
+    ax.tick_params(axis="x", which="both", bottom=True, top=False, labelbottom=True)
+    ax.tick_params(axis="y", which="both", left=True, right=False, labelbottom=True)
     plt.tight_layout()
+    sns.despine()
+    sns.set_style("white")
     if not plot_path:
         plt.show()
     else:
-        print(df)
         plt.savefig(os.path.join(plot_path, "patient_timeline.pdf"))
     ax.cla()
     plt.cla()
@@ -630,7 +654,6 @@ def plot_survival_sd(
     test_dataset: SurvivalDataset,
     predicted_times: list[float],
     std_devs: list[float] | None = None,
-    show: bool = False,
     plot_path: str | None = None,
 ) -> None:
     """
@@ -639,15 +662,13 @@ def plot_survival_sd(
     :param test_dataset: test dataset.
     :param predicted_times: predicted survival times.
     :param std_devs: standard deviations.
-    :param show: whether to show or save, defaults to False.
     :param plot_path: path to save to, defaults to None
     """
     sns_green, sns_orange = sns.color_palette("Set2")[:2]
     fig, ax = plt.subplots(figsize=(10, 6))
 
     if std_devs is None:
-        std_devs = [0] * len(test_dataset.y_lower_bound)
-
+        std_devs = np.array([0] * len(test_dataset.y_lower_bound))
     censored_indices = [
         i
         for i in range(len(test_dataset.y_upper_bound))
@@ -658,29 +679,35 @@ def plot_survival_sd(
     ]
     true_times_censored = test_dataset.y_lower_bound[censored_indices]
 
-    predicted_times_event = [
+    predicted_times_event = predicted_times[
         [i for i in range(len(test_dataset.y_upper_bound)) if i not in censored_indices]
     ]
     predicted_times_censored = predicted_times[censored_indices]
+    std_devs_event = std_devs[
+        [i for i in range(len(test_dataset.y_upper_bound)) if i not in censored_indices]
+    ]
+    std_devs_censored = std_devs[censored_indices]
     ax.errorbar(
         true_times_event,
         predicted_times_event,
-        yerr=std_devs,
+        yerr=std_devs_event,
         fmt="X",
         capsize=5,
         ecolor=sns_orange,
         markeredgecolor=sns_orange,
         markerfacecolor=sns_orange,
+        label="Event",
     )
     ax.errorbar(
         true_times_censored,
         predicted_times_censored,
-        yerr=std_devs,
+        yerr=std_devs_censored,
         fmt="X",
         capsize=5,
         ecolor=sns_green,
         markeredgecolor=sns_green,
         markerfacecolor=sns_green,
+        label="Censored",
     )
     ax.plot(
         [0, max(true_times_event)],
@@ -690,15 +717,134 @@ def plot_survival_sd(
         color="black",
     )
 
-    ax.set_xlabel("True Survival Time")
-    ax.set_ylabel("Predicted Survival Time")
-    ax.set_title("True vs Predicted Survival Times with Standard Deviations")
+    ax.set_xlabel("True survival time (years)")
+    ax.set_ylabel("Predicted survival time (years)")
+    ax.set_title("True vs Predicted Survival Times in Years")
     ax.legend()
 
     ax.grid(True, linestyle="--", alpha=0.7)
-
+    ax.set_xlim(0, max(predicted_times_event))
+    ax.tick_params(axis="x", which="both", bottom=True, top=False, labelbottom=True)
+    ax.tick_params(axis="y", which="both", left=True, right=False, labelbottom=True)
+    sns.despine()
+    sns.set_style("white")
     plt.tight_layout()
-    if show:
+    if not plot_path:
         plt.show()
     else:
         plt.savefig(os.path.join(plot_path, "survival_vs_sd.pdf"))
+
+    ax.cla()
+    plt.cla()
+    plt.clf()
+    plt.close()
+
+
+def confidence_interval_accuracy(
+    y_intervals: tuple[np.ndarray, np.ndarray], y_true: pd.Series | np.ndarray
+) -> float:
+    """
+    Obtain the accuracy of the confidence interval.
+
+    Taken from https://github.com/mvaldenegro/keras-uncertainty.
+
+    :param y_intervals: intervals of the predicted values.
+    :param y_true: true values.
+    :return: accuracy of the confidence interval.
+    """
+    interval_min, interval_max = y_intervals
+    indicator = np.logical_and(y_true >= interval_min, y_true <= interval_max)
+    return np.mean(indicator)
+
+
+def regressor_calibration_curve(
+    y_pred: np.ndarray,
+    y_true: np.ndarray,
+    y_std: pd.Series | np.ndarray,
+    num_points: int = 20,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Compute the reliability plot for a regression prediction.
+
+    Taken from https://github.com/mvaldenegro/keras-uncertainty, with slight modifications.
+
+    :param y_pred: model predictions, usually the mean of the predicted distribution.
+    :param y_std: model predicted standard deviation of the predicted distribution.
+    :param y_true: ground truth labels.
+    :param num_points: number of points in the calibration curve.
+    :return: curve_conf, curve_acc: confidence and accuracy values for the calibration curve.
+    """
+    EPSILON = 1e-5
+    alphas = np.linspace(0.0 + EPSILON, 1.0 - EPSILON, num_points + 1)
+    curve_conf = []
+    curve_acc = []
+
+    for alpha in alphas:
+        alpha_intervals = norm.interval(alpha, y_pred, y_std)
+        acc = confidence_interval_accuracy(alpha_intervals, y_true)
+
+        curve_conf.append(alpha)
+        curve_acc.append(acc)
+
+    return np.array(curve_conf), np.array(curve_acc)
+
+
+def plot_survival_calibration(
+    dataset_test: SurvivalDataset,
+    ys: np.ndarray,
+    plot_path: str | None = None,
+) -> None:
+    """
+    Plot the calibration curve for survival predictions.
+
+    :param dataset_test: test dataset.
+    :param ys: predicted survival times.
+    :param plot_path: path to save to, defaults to None
+    """
+    censored_indices = [
+        i
+        for i in range(len(dataset_test.y_upper_bound))
+        if np.isinf(dataset_test.y_upper_bound[i])
+    ]
+    true_times_event = dataset_test.y_lower_bound[
+        [i for i in range(len(dataset_test.y_upper_bound)) if i not in censored_indices]
+    ]
+    predicted_times_event = ys[
+        :,
+        [
+            i
+            for i in range(len(dataset_test.y_upper_bound))
+            if i not in censored_indices
+        ],
+    ]
+    std_devs = predicted_times_event.std(axis=0)
+    ypred = predicted_times_event.mean(axis=0)
+
+    conf_curve, acc_curve = regressor_calibration_curve(
+        ypred, true_times_event, std_devs
+    )
+    plt.plot(conf_curve, acc_curve, marker="o")
+    plt.plot(
+        [0, 1],
+        [0, 1],
+        "--",
+        label="Perfect prediction",
+        color="black",
+    )
+    plt.tick_params(axis="x", which="both", bottom=True, top=False, labelbottom=True)
+    plt.tick_params(axis="y", which="both", left=True, right=False, labelbottom=True)
+    plt.xlim(0, 1.1)
+    plt.ylim(top=1)
+    plt.xlabel("Confidence")
+    plt.ylabel("Accuracy")
+    plt.title("Calibration Curve")
+    sns.despine()
+    sns.set_style("white")
+    if not plot_path:
+        plt.show()
+    else:
+        plt.savefig(os.path.join(plot_path, "calibration_curve.pdf"))
+
+    plt.cla()
+    plt.clf()
+    plt.close()

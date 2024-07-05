@@ -1,0 +1,5 @@
+{
+    "n_neighbors": 2,
+    "min_dist": 0.0,
+    "metric": "correlation"
+}

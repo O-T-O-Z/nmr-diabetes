@@ -162,11 +162,10 @@ cython_debug/
 # Mac
 .DS_Store
 datasets.nosync/
-results*
 old_results/
 logdir/
 experiments_old/
 read_files.py
-plotting.ipynb
 current_hp.json
 experiments
+ys_train*

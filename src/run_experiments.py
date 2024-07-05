@@ -71,6 +71,8 @@ def perform_final_cross_validation(
     dataset: SurvivalDataset,
     best_features: list,
     best_params: dict,
+    ds: str,
+    save_path: str,
     use_mcc: bool = False,
     bagging: bool = False,
     bagging_params: dict | None = None,
@@ -81,12 +83,16 @@ def perform_final_cross_validation(
     :param dataset: dataset to perform cross-validation on.
     :param best_features: best features to use.
     :param best_params: best parameters to use.
+    :param ds: dataset name.
+    :param save_path: path to save the results.
     :param use_mcc: whether to use MCC as metric, defaults to False.
     :param bagging: whether bagging hyperparams are being searched, defaults to False.
     :param bagging_params: parameters to use during bagging, defaults to {}.
     """
     dataset.X = dataset.X[best_features]
-    all_results = []
+    all_results = pd.DataFrame(
+        columns=["C-index", "Censoring accuracy", "MAE observed"]
+    )
     func = cross_validate_model_bagging if bagging else cross_validate_model
     kwargs = bagging_params if bagging else {}
     print("Cross validating...")
@@ -100,9 +106,8 @@ def perform_final_cross_validation(
             use_mcc=use_mcc,
             **kwargs,
         )
-        all_results.append(results)
-    print("Mean c-index:", np.mean(all_results))
-    print("Std c-index:", np.std(all_results))
+        all_results.loc[random_state] = np.array(results).mean(axis=0)
+    all_results.to_csv(f"{save_path}/cv_results_{ds}.csv")
 
 
 def perform_test(
@@ -178,7 +183,7 @@ def save_table(save_path: str) -> None:
     )
 
     for f in os.listdir(save_path):
-        if f.endswith(".csv"):
+        if f.endswith(".csv") and "test_results" in f:
             df = pd.read_csv(os.path.join(save_path, f))
             ds = f.split("_")[-1].split(".csv")[0]
             mcc = calculate_mcc(
@@ -237,7 +242,6 @@ def main() -> None:
     save_path = os.path.join(
         "experiments", str(args.save) + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     )
-    save_path = "experiments/bagging2024-06-26_11-54-15"
 
     os.makedirs(save_path, exist_ok=True)
     datasets = [
@@ -289,6 +293,8 @@ def main() -> None:
             dataset,
             best_features,
             best_params,
+            d,
+            save_path,
             args.use_mcc,
             args.bagging,
             bagging_params,

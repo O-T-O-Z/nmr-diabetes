@@ -1,0 +1,1 @@
+['GLUC_2', 'TGL_2', 'V30_2B', 'WAIST_2B', 'RACE', 'CRP_2', 'ANTIHYP_2B', 'Creat_NC2']
