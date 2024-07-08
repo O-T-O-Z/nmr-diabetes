@@ -1,0 +1,15 @@
+\begin{table}
+\caption{XGBoost AFT models' performances on each dataset with, without or only including glucose.}
+\label{tab:glucose_res}
+\begin{tabular}{llllllllll}
+\toprule
+Dataset & \multicolumn{3}{c}{Clinical} & \multicolumn{3}{c}{Full} & \multicolumn{3}{c}{Nmr} \\
+ & C-index & Censoring accuracy & MAE observed & C-index & Censoring accuracy & MAE observed & C-index & Censoring accuracy & MAE observed \\
+Glucose &  &  &  &  &  &  &  &  &  \\
+\midrule
+\textbf{Including} & 0.853 ± 0.006 & 0.977 ± 0.002 & 4.674 ± 0.094 & 0.856 ± 0.006 & 0.959 ± 0.006 & 4.263 ± 0.144 & 0.823 ± 0.006 & 0.971 ± 0.004 & 5.039 ± 0.114 \\
+\textbf{Uniquely} & 0.821 ± 0.004 & 0.993 ± 0.001 & 5.581 ± 0.065 & 0.842 ± 0.006 & 0.971 ± 0.003 & 4.875 ± 0.093 & 0.823 ± 0.006 & 0.971 ± 0.004 & 5.039 ± 0.114 \\
+\textbf{Excluding} & 0.755 ± 0.008 & 0.986 ± 0.004 & 5.756 ± 0.065 & 0.843 ± 0.008 & 0.955 ± 0.005 & 4.515 ± 0.107 & 0.823 ± 0.006 & 0.971 ± 0.004 & 5.039 ± 0.114 \\
+\bottomrule
+\end{tabular}
+\end{table}

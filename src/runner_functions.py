@@ -444,6 +444,8 @@ def tune_hp(
             early_stopping_rounds=50,
         )
         params_to_save = {k: xgbparams[k] for k in relevant_params}
+        if isinstance(result[0], tuple):
+            result = np.mean([r[0] for r in result])
         results[json.dumps(params_to_save)] = result
         with open("current_hp.json", "w") as f:
             json.dump(results, f)
@@ -498,6 +500,8 @@ def tune_hp_bagging(
             **bagging_params,
         )
         params_to_save = {k: bagging_params[k] for k in relevant_params}
+        if isinstance(result[0], tuple):
+            result = np.mean([r[0] for r in result])
         results[json.dumps(params_to_save)] = result
         with open("current_hp.json", "w") as f:
             json.dump(results, f)
