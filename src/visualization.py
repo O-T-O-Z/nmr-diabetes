@@ -12,7 +12,7 @@ from sklearn.base import BaseEstimator
 from sklearn.decomposition import PCA
 
 from survival_dataset import SurvivalDataset
-from utils import c_index
+from utils import c_index, convert_to_dmatrix
 
 
 def plot_feature_selectors(feature_selectors: dict, name: str, SAVE_PATH: str) -> None:
@@ -134,6 +134,15 @@ def plot_single_shap(
         f"{float(f):.4f} ppm" if len(str(f)) > 14 else features_map[f]
         for f in best_features
     ]
+
+    dtest = convert_to_dmatrix(
+        test_dataset.X[best_features],
+        test_dataset.y_lower_bound,
+        test_dataset.y_upper_bound,
+    )
+    ys = np.array([m.predict(dtest) for m in clf])
+    mean = np.mean(ys, axis=0)
+    stdev = np.std(ys, axis=0) * 1.96
     for model in clf:
         explainer = shap.Explainer(
             model, test_dataset.X[best_features], feature_names=feature_names
@@ -161,6 +170,10 @@ def plot_single_shap(
 
     for i, ax in enumerate(axes):
         plt.sca(ax)
+        ax.set_title(
+            f"Ground truth: {test_dataset.y_lower_bound.iloc[i]:.2f} years, "
+            f"Prediction: {mean[i]:.2f} years ± {stdev[i]:.2f} years"
+        )
         ax.set_xticks([])
         ax.set_xlabel("")
         shap.waterfall_plot(

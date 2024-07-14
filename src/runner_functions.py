@@ -228,16 +228,16 @@ def test_model_bagging(
         incorrect_preds_df = all_preds.iloc[incorrect_preds]
 
         correct_event = list(
-            incorrect_preds_df.loc[incorrect_preds_df["censored"] == 0].head(5).index
+            incorrect_preds_df.loc[incorrect_preds_df["censored"] == 0].head(3).index
         )
         incorrect_event = list(
-            incorrect_preds_df.loc[incorrect_preds_df["censored"] == 1].head(5).index
+            incorrect_preds_df.loc[incorrect_preds_df["censored"] == 1].head(3).index
         )
         correct_censored = list(
-            correct_preds_df.loc[correct_preds_df["censored"] == 1].head(5).index
+            correct_preds_df.loc[correct_preds_df["censored"] == 1].head(3).index
         )
         incorrect_censored = list(
-            correct_preds_df.loc[correct_preds_df["censored"] == 0].head(5).index
+            correct_preds_df.loc[correct_preds_df["censored"] == 0].head(3).index
         )
         for ind, corr, cens in [
             (correct_event, True, False),
