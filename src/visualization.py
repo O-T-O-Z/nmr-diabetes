@@ -52,7 +52,7 @@ def plot_shap(
     :param clf: trained model.
     :param test_dataset: training dataset.
     :param best_features: list of best features.
-    :param plot_path: path to save to, defaults to None
+    :param plot_path: path to save to, defaults to None.
     """
     if isinstance(clf, list):
         shap_values_list = []
@@ -94,6 +94,89 @@ def plot_shap(
     )
     if plot_path:
         plt.savefig(os.path.join(plot_path, "shap_plot.pdf"))
+    else:
+        plt.show()
+    plt.cla()
+    plt.clf()
+
+
+def plot_single_shap(
+    clf: BaseEstimator,
+    test_dataset: SurvivalDataset,
+    best_features: list,
+    is_censored: bool,
+    is_correct: bool,
+    plot_path: str | None = None,
+) -> None:
+    """
+    Calculate and plot SHAP values for three individual participants.
+
+    :param clf: trained model.
+    :param test_dataset: training dataset.
+    :param best_features: list of best features.
+    :param is_censored: whether the participant is censored.
+    :param is_correct: whether the prediction is correct.
+    :param plot_path: path to save to, defaults to None.
+    """
+    shap_explanations = []
+    features_map = {
+        "GLUC_2": "Glucose",
+        "WAIST_2B": "Waist circumference",
+        "ANTIHYP_2B": "Antihypertensive medication",
+        "TGL_2": "Triglycerides",
+        "Creat_NC2": "Creatinine",
+        "V30_2B": "Years of smoking",
+        "RACE": "Race",
+        "CRP_2": "C-reactive protein",
+    }
+    # rename the features with more than 4 decimals
+    feature_names = [
+        f"{float(f):.4f} ppm" if len(str(f)) > 14 else features_map[f]
+        for f in best_features
+    ]
+    for model in clf:
+        explainer = shap.Explainer(
+            model, test_dataset.X[best_features], feature_names=feature_names
+        )
+        shap_explanation = explainer(test_dataset.X[best_features])
+        shap_explanations.append(shap_explanation)
+
+    # Combine the explanations
+    combined_shap_values = np.mean([exp.values for exp in shap_explanations], axis=0)
+    combined_base_values = np.mean(
+        [exp.base_values for exp in shap_explanations], axis=0
+    )
+
+    # Create a new Explanation object with the combined values
+    final_explanation = shap.Explanation(
+        values=combined_shap_values,
+        base_values=combined_base_values,
+        data=test_dataset.X[best_features].values,
+        feature_names=feature_names,
+    )
+
+    corr = "correct" if is_correct else "incorrect"
+    cens = "censored" if is_censored else "event"
+    fig, axes = plt.subplots(3, 1, sharex=True)
+
+    for i, ax in enumerate(axes):
+        plt.sca(ax)
+        ax.set_xticks([])
+        ax.set_xlabel("")
+        shap.waterfall_plot(
+            final_explanation[i],
+            show=False,
+        )
+    fig.suptitle(f"SHAP values for three {corr} {cens} participants", fontsize=16)
+    fig.set_size_inches(12, 10)
+    fig.tight_layout()
+    if plot_path:
+        plt.savefig(
+            os.path.join(
+                plot_path,
+                f"shap_plot_{corr}_{cens}.pdf",
+            )
+        )
     else:
         plt.show()
     plt.cla()

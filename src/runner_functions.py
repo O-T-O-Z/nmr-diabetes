@@ -3,6 +3,7 @@ import json
 import os
 
 import numpy as np
+import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -10,7 +11,7 @@ from tqdm import tqdm
 
 from survival_dataset import SurvivalDataset
 from utils import bootstrap_split, c_index, calculate_mcc, convert_to_dmatrix
-from visualization import plot_shap, plot_survival_time, plot_training
+from visualization import plot_shap, plot_single_shap, plot_survival_time, plot_training
 
 
 def train_one_model(
@@ -136,6 +137,7 @@ def test_model_bagging(
     subset_fraction: tuple[float, float] = (0.8, 0.8),
     aggregation: str = "mean",
     replace: bool = True,
+    plot_single_preds: bool = False,
 ) -> tuple[float, float, float] | float:
     """
     Test the model on the given test dataset using bagging.
@@ -153,6 +155,7 @@ def test_model_bagging(
     :param subset_fraction: subset fractions bootstrapping (event, censored), defaults to (0.8, 0.8).
     :param aggregation: aggregation method, defaults to "mean".
     :param replace: whether to sample with replacement, defaults to True.
+    :param plot_single_preds: whether to plot single predictions, defaults to False.
     :return: c-index, censoring accuracy, and MAE observed or evaluation metric.
     """
     models = []
@@ -198,6 +201,63 @@ def test_model_bagging(
         ci_lower = np.percentile(ys, axis=0, q=2.5)
         ci_upper = np.percentile(ys, axis=0, q=97.5)
         ypred, ci_lower, ci_upper = (median, ci_lower, ci_upper)
+
+    if plot_single_preds:
+        correct_preds = [
+            i
+            for i in range(len(test_dataset.y_lower_bound))
+            if ci_lower[i] <= test_dataset.y_lower_bound[i] <= ci_upper[i]
+        ]
+        incorrect_preds = [
+            i
+            for i in range(len(test_dataset.y_lower_bound))
+            if ci_lower[i] > test_dataset.y_lower_bound[i]
+            or test_dataset.y_lower_bound[i] > ci_upper[i]
+        ]
+
+        all_preds = pd.DataFrame(
+            {
+                "ci_lower": ci_lower,
+                "ci_upper": ci_upper,
+                "lower_bound": test_dataset.y_lower_bound,
+                "upper_bound": test_dataset.y_upper_bound,
+                "censored": test_dataset.censored["CENSORED"],
+            }
+        )
+        correct_preds_df = all_preds.iloc[correct_preds]
+        incorrect_preds_df = all_preds.iloc[incorrect_preds]
+
+        correct_event = list(
+            incorrect_preds_df.loc[incorrect_preds_df["censored"] == 0].head(5).index
+        )
+        incorrect_event = list(
+            incorrect_preds_df.loc[incorrect_preds_df["censored"] == 1].head(5).index
+        )
+        correct_censored = list(
+            correct_preds_df.loc[correct_preds_df["censored"] == 1].head(5).index
+        )
+        incorrect_censored = list(
+            correct_preds_df.loc[correct_preds_df["censored"] == 0].head(5).index
+        )
+        for ind, corr, cens in [
+            (correct_event, True, False),
+            (incorrect_event, False, False),
+            (correct_censored, True, True),
+            (incorrect_censored, False, True),
+        ]:
+            subset = test_dataset.model_copy()
+            subset.y_lower_bound = subset.y_lower_bound.iloc[ind]
+            subset.y_upper_bound = subset.y_upper_bound.iloc[ind]
+            subset.X = subset.X.iloc[ind]
+            subset.censored = subset.censored.iloc[ind]
+            plot_single_shap(
+                models,
+                subset,
+                best_features,
+                is_censored=cens,
+                is_correct=corr,
+                plot_path=plot_path,
+            )
 
     cindex, censoring_acc, mae_observed = c_index(
         test_dataset.y_lower_bound,
